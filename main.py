@@ -4,7 +4,7 @@ import easyocr
 import werkzeug
 
 app = Flask(__name__)
-CORS(app, resources={r"/extract_info": {"origins": "http://127.0.0.1:5500"}})
+CORS(app)
 
 @app.route('/extract_info', methods=['POST'])
 def extract_info():
