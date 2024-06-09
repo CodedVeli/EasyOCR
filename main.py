@@ -1,34 +1,45 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import easyocr
-import cv2
-from matplotlib import pyplot as plt
-import numpy as np
+import werkzeug
 
-IMAGE_PATH = 'ke.jpg'
+app = Flask(__name__)
+CORS(app, resources={r"/extract_info": {"origins": "http://127.0.0.1:5500"}})
 
-reader = easyocr.Reader(['en'])
-result = reader.readtext(IMAGE_PATH)
-result
+@app.route('/extract_info', methods=['POST'])
+def extract_info():
+    # Initialize the EasyOCR reader
+    reader = easyocr.Reader(['en'])
 
-top_left = tuple(result[0][0][0])
-bottom_right = tuple(result[0][0][2])
-text = result[0][1]
-font = cv2.FONT_HERSHEY_SIMPLEX
+    # Save the image file
+    imagefile = request.files['img-id']
+    filename = werkzeug.utils.secure_filename(imagefile.filename)
+    imagefile.save(filename)
 
-img = cv2.imread(IMAGE_PATH)
-img = cv2.rectangle(img,top_left,bottom_right,(0,255,0),3)
-img = cv2.putText(img,text,top_left, font, 0.5,(255,255,255),2,cv2.LINE_AA)
-plt.imshow(img)
-plt.show()
+    # Perform OCR on the image
+    results = reader.readtext(filename)
 
-img = cv2.imread(IMAGE_PATH)
-spacer = 100
-for detection in result: 
-    top_left = tuple(detection[0][0])
-    bottom_right = tuple(detection[0][2])
-    text = detection[1]
-    img = cv2.rectangle(img,top_left,bottom_right,(0,255,0),3)
-    img = cv2.putText(img,text,(20,spacer), font, 0.5,(0,255,0),2,cv2.LINE_AA)
-    spacer+=15
-    
-plt.imshow(img)
-plt.show()
+    # Initialize variables to store extracted information
+    id_number = None
+    full_names = []
+
+    # Improved extraction logic
+    for result in results:
+        text = result[1].strip()
+        # Check for ID number
+        if len(text) == 8 and text.isdigit():
+            id_number = text
+        # Check for full names (basic heuristic: more than one word and mostly alphabetic)
+        elif len(text.split()) > 1 and all(char.isalpha() or char.isspace() for char in text):
+            full_names.append(text)
+
+    if full_names:
+        full_names = max(full_names, key=len)
+    else:
+        full_names = None
+
+    # Return the extracted information
+    return jsonify({"ID_Number": id_number, "Full_Names": full_names})
+
+if __name__ == '__main__':
+    app.run(debug=True)
